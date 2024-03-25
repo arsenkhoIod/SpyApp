@@ -1,8 +1,5 @@
 //
 //  SceneDelegate.swift
-//  SpyApp
-//
-//  Created by mac on 04.03.2024.
 //
 
 import UIKit

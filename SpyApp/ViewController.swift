@@ -1,74 +1,144 @@
 //
 //  ViewController.swift
-//  SpyApp
 //
-//  Created by mac on 04.03.2024.
-//
+
 
 import UIKit
 
-class ViewController: UIViewController, UITableViewDataSource {
+class ViewController: UIViewController, UITableViewDelegate, UITableViewDataSource{
     
+
+    let context = (UIApplication.shared.delegate as! AppDelegate).persistentContainer.viewContext
     
-    private let table: UITableView = {
+    let tableView: UITableView = {
         let table = UITableView()
-        table.register(UITableViewCell.self
-                       , forCellReuseIdentifier: "cell")
-        return table
+            table.register(UITableViewCell.self,
+                           forCellReuseIdentifier: "cell")
+            return table
     }()
     
-    var items = [String]()
-
+    private var models = [Items]()
+    
     override func viewDidLoad() {
         super.viewDidLoad()
-        
-        self.items = UserDefaults.standard.stringArray(forKey: "items") ?? []
-        
         title = "To Do List"
-        view.addSubview(table)
-        table.dataSource = self
-        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add, target: self, action: #selector(didTapAdd))
+        view.addSubview(tableView)
+        getAllItems()
+        tableView.delegate = self
+        tableView.dataSource = self
+        tableView.frame = view.bounds
+        
+        navigationItem.rightBarButtonItem = UIBarButtonItem(barButtonSystemItem: .add,
+                                                            target: self,
+                                                            action: #selector(didTapAdd))
     }
-    
+                                                            
     @objc private func didTapAdd() {
-        let alert = UIAlertController(title: "New Item", message: "Enter New Item", preferredStyle: .alert)
-        alert.addTextField { field in
-            field.placeholder = "Enter item:"
-        }
-        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
-        alert.addAction(UIAlertAction(title: "Done", style: .default, handler: { [weak self] (_) in
-            if let field = alert.textFields?.first {
-                if let text = field.text, !text.isEmpty{
-                    
-                    DispatchQueue.main.async {
-                        var currentItems = UserDefaults.standard.stringArray(forKey: "items") ?? []
-                        currentItems.append(text)
-                        UserDefaults.standard.set(currentItems, forKey: "items")
-                        self?.items.append(text)
-                        self?.table.reloadData()
-                    }
-                    
-                }
+        let alert = UIAlertController(title: "New Item",
+                                      message: "Enter new item",
+                                      preferredStyle: .alert)
+        alert.addTextField(configurationHandler: nil)
+        alert.addAction(UIAlertAction(title: "Submit", style: .cancel, handler: { [weak self] _ in
+            guard let field = alert.textFields?.first, let text = field.text, !text.isEmpty else {
+                return
             }
+            self?.createItem(name: text)
         }))
         present(alert, animated: true)
     }
-    
-    override func viewDidLayoutSubviews() {
-        super.viewDidLayoutSubviews()
-        table.frame = view.bounds
-    }
-    
+                                                            
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
-        return items.count
+        return models.count
     }
     
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        let model = models[indexPath.row]
         let cell = tableView.dequeueReusableCell(withIdentifier: "cell", for: indexPath)
-        cell.textLabel?.text = items[indexPath.row]
+        cell.textLabel?.text = model.name
         return cell
     }
     
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        let item = models[indexPath.row]
+        let sheet = UIAlertController(title: "Edit",
+                                      message: nil,
+                                      preferredStyle: .actionSheet)
+        sheet.addAction(UIAlertAction(title: "Cancel", style: .cancel, handler: nil))
+        sheet.addAction(UIAlertAction(title: "Edit", style: .default, handler: { _ in
+            
+            let alert = UIAlertController(title: "Edit Item",
+                                          message: "Edit your item",
+                                          preferredStyle: .alert)
+            alert.addTextField(configurationHandler: nil)
+            alert.textFields?.first?.text = item.name
+            alert.addAction(UIAlertAction(title: "Save", style: .cancel, handler: { [weak self] _ in
+                guard let field = alert.textFields?.first, let newName = field.text, !newName.isEmpty else {
+                    return
+                }
+                self?.updateItem(item: item, newName: newName)
+            }))
+            self.present(alert, animated: true)
+            
+        }))
+        sheet.addAction(UIAlertAction(title: "Delete", style: .destructive, handler: { [weak self] _ in
+            self?.deleteItem(item: item)
+        }))
+        present(sheet, animated: true)
+    }
+    
+    
+    
+    
+    //Core Data
+    func getAllItems() {
+        do {
+            models = try context.fetch(Items.fetchRequest())
+            
+            DispatchQueue.main.async {
+                self.tableView.reloadData()
+            }
+        }
+        catch {
+            //error
+        }
+    }
+    
+    func createItem(name: String) {
+        let newItem = Items(context: context)
+        newItem.name = name
+        newItem.date = Date()
+        
+        do {
+            try context.save()
+            getAllItems()
+        }
+        catch {
+            
+        }
+    }
+    
+    func deleteItem(item: Items) {
+        context.delete(item)
+        do {
+            try context.save()
+            getAllItems()
+        }
+        catch {
+            
+        }
+    }
+    
+    func updateItem(item: Items, newName: String) {
+        item.name = newName
+        do {
+            try context.save()
+            getAllItems()
+        }
+        catch {
+            
+        }
+    }
 
 }
 
